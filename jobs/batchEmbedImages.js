@@ -1,6 +1,6 @@
 const pool = require('../db/pool');
 const { embedText } = require('../services/embeddings');
-const { logCost } = require('../services/costTracking');
+const { logCost, logEmbeddingCost } = require('../services/costTracking');
 
 const RETRYABLE_REASONS = new Set(['empty_response', 'invalid_json', 'api_error', 'network_error']);
 const MAX_RETRIES = 2;
@@ -21,7 +21,7 @@ async function embedOneImage(image) {
 
   while (attempt <= MAX_RETRIES) {
     result = await embedText(text);
-    await logCost('embedding', image.id, {}); // usage not returned by embed endpoint; logs a $0 entry for traceability
+    await logEmbeddingCost(image.id, text);
 
     if (result.success) break;
     if (result.reason === 'rate_limited') throw new QuotaExhaustedError(`Daily quota hit at image ${image.id}`);

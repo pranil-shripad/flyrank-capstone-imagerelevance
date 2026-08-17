@@ -3,7 +3,6 @@ const pool = require('../db/pool');
 
 const router = express.Router();
 
-// POST /reviews  { suggestionId, decision: 'approved'|'rejected', reviewerNote? }
 router.post('/', async (req, res) => {
   const { suggestionId, decision, reviewerNote } = req.body;
 
@@ -26,7 +25,6 @@ router.post('/', async (req, res) => {
   res.status(201).json(rows[0]);
 });
 
-// GET /reviews/pending -> suggestions accepted by the guard but not yet reviewed by a human
 router.get('/pending', async (req, res) => {
   const { rows } = await pool.query(
     `SELECT s.id AS suggestion_id, s.post_id, p.title AS post_title,
@@ -41,7 +39,6 @@ router.get('/pending', async (req, res) => {
   res.json(rows);
 });
 
-// GET /reviews -> full review history
 router.get('/', async (req, res) => {
   const { rows } = await pool.query(
     `SELECT r.*, s.post_id, s.image_id, s.guard_result, s.guard_reason
@@ -54,16 +51,27 @@ router.get('/', async (req, res) => {
 
 // GET /reviews/why/:suggestionId -> inspect why an image was selected or refused
 router.get('/why/:suggestionId', async (req, res) => {
-  const { rows } = await pool.query(
-    `SELECT s.*, p.title AS post_title, i.subject AS image_subject, i.confidence AS image_confidence
-     FROM suggestions s
-     JOIN posts p ON p.id = s.post_id
-     JOIN images i ON i.id = s.image_id
-     WHERE s.id = $1`,
-    [req.params.suggestionId]
-  );
-  if (rows.length === 0) return res.status(404).json({ error: 'suggestion_not_found' });
-  res.json(rows[0]);
+  // NEW: validate the param is actually a number before it ever reaches SQL
+  const suggestionId = parseInt(req.params.suggestionId, 10);
+  if (isNaN(suggestionId)) {
+    return res.status(400).json({ error: 'invalid_input', message: 'suggestionId must be a number' });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT s.*, p.title AS post_title, i.subject AS image_subject, i.confidence AS image_confidence
+       FROM suggestions s
+       JOIN posts p ON p.id = s.post_id
+       JOIN images i ON i.id = s.image_id
+       WHERE s.id = $1`,
+      [suggestionId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'suggestion_not_found' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'lookup_failed' });
+  }
 });
 
 module.exports = router;

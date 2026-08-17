@@ -1,6 +1,6 @@
 const pool = require('../db/pool');
 const { embedText } = require('../services/embeddings');
-const { logCost } = require('../services/costTracking');
+const { logEmbeddingCost } = require('../services/costTracking');
 
 async function runBatchEmbedPosts() {
   const { rows: posts } = await pool.query(
@@ -16,7 +16,7 @@ async function runBatchEmbedPosts() {
   for (const post of posts) {
     const text = `${post.title}. ${post.body}`;
     const result = await embedText(text);
-    await logCost('embedding', post.id, {});
+    await logEmbeddingCost(post.id, text); // correctly uses post.id here
 
     if (!result.success) {
       console.error(`[embed-posts] post ${post.id} failed: ${result.reason}`);

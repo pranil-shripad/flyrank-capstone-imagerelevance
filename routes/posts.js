@@ -1,7 +1,6 @@
 const express = require('express');
 const pool = require('../db/pool');
 const { runBatchEmbedPosts } = require('../jobs/batchEmbedPosts');
-const { runBatchEmbedImages } = require('../jobs/batchEmbedImages');
 const { rankImagesForPost } = require('../services/matching');
 
 const router = express.Router();
@@ -22,8 +21,14 @@ router.get('/', async (req, res) => {
 });
 
 router.get('/:id/images', async (req, res) => {
+  // NEW: validate the param is actually a number before it ever reaches SQL
+  const postId = parseInt(req.params.id, 10);
+  if (isNaN(postId)) {
+    return res.status(400).json({ error: 'invalid_input', message: 'post id must be a number' });
+  }
+
   try {
-    const result = await rankImagesForPost(req.params.id);
+    const result = await rankImagesForPost(postId);
     if (result.error) return res.status(404).json(result);
     res.json(result);
   } catch (err) {
