@@ -13,3 +13,6 @@ like network timeouts or empty responses (retry with backoff). Also hit one
 one-off connection timeout, confirmed via an isolated test script it wasn't
 systemic, and added a `network_error` retry path anyway since transient
 network failures are a real production scenario.
+
+Guard's substring category matching missed "puppy"/"husky"/"kudu" — fixed with a subject-family classifier
+Initial similarity threshold (0.55) was a guess and let a fox image "match" a space article — fixed by measuring real genuine-vs-noise scores across all posts and setting the threshold in the gap between them (noise ceiling 0.702, weakest genuine match 0.772 → threshold 0.75)
