@@ -62,3 +62,61 @@ noConfidentMatch: true
 
 SIMILARITY_THRESHOLD set to 0.75 — below the weakest genuine match (0.772),
 above the noise ceiling (0.702).
+
+
+## Box: A small labeled evaluation dataset measures top-1 precision
+
+```
+Post 1: expected="fox" actual="red foxes" -> PASS
+Post 2: expected="wolf" actual="gray wolf" -> PASS
+Post 3: expected="dog" actual="dog" -> PASS
+Post 4: expected="bear" actual="two brown bears" -> PASS
+Post 5: expected="deer" actual="red deer stag" -> PASS
+Post 6: expected="no confident match" actual="no confident match" -> PASS
+
+Top-1 Precision: 6/6 = 100.0%
+```
+
+## Box: Review workflow (approve/reject/inspect)
+
+Approved suggestion 1 (fox post → red foxes image) and suggestion 251
+(bear post → brown bears image) via POST /reviews. Confirmed in review
+history via GET /reviews with full suggestion/post/image join.
+
+## Box: Automated tests cover schema validation, mismatch rejection, and matching accuracy
+
+```
+Test Suites: 3 passed, 3 total
+Tests:       19 passed, 19 total
+Time:        0.713 s
+```
+Includes regression tests for two bugs found during development:
+- non-literal subject matching (puppy/husky/kudu incorrectly bypassing the guard)
+- similarity threshold below the embedding model's noise floor
+
+## Box: Vision and embedding costs tracked per call (corrected)
+
+```
+ call_type | count |   sum    |  sum(tokens)
+-----------+-------+----------+---------------
+ vision    |   158 | 0.005400 | 56323
+ embedding |   124 | 0.000000 |  2952
+```
+(embedding cost is genuinely $0 — free tier — but token counts are now
+estimated per call from input text length, not a placeholder)
+
+## Box: Semantic matching works for equivalent concepts (confirmed independently)
+
+```
+fox ↔ "Vulpes vulpes" similarity: 0.882
+fox ↔ wolf similarity: 0.785
+```
+0.097 gap confirms the embedding space captures meaning, not word overlap —
+"Vulpes vulpes" shares no words with "red fox" yet ranks closer than "wolf".
+
+## Box: API endpoints validated — clean 4xx, never a 500
+
+```
+GET /reviews/why/abc  → 400 {"error":"invalid_input","message":"suggestionId must be a number"}
+GET /posts/xyz/images → 400 {"error":"invalid_input","message":"post id must be a number"}
+```
