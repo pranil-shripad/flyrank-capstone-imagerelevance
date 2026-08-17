@@ -1,0 +1,8 @@
+[
+  { "postId": 1, "expectedSubjectKeyword": "fox" },
+  { "postId": 2, "expectedSubjectKeyword": "wolf" },
+  { "postId": 3, "expectedSubjectKeyword": "dog" },
+  { "postId": 4, "expectedSubjectKeyword": "bear" },
+  { "postId": 5, "expectedSubjectKeyword": "deer" },
+  { "postId": 6, "expectedSubjectKeyword": null }
+]
