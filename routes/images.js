@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../db/pool');
 const { runBatchTagging } = require('../jobs/batchTagImages');
+const { runBatchEmbedImages } = require('../jobs/batchEmbedImages');
 
 const router = express.Router();
 
@@ -19,6 +20,16 @@ router.post('/batch-tag', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'batch_tagging_failed' });
+  }
+});
+
+router.post('/batch-embed', async (req, res) => {
+  try {
+    const result = await runBatchEmbedImages();
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'image_embedding_failed' });
   }
 });
 
