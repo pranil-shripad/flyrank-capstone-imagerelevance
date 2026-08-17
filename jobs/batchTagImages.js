@@ -5,8 +5,11 @@ const { classifyImage } = require('../services/vision');
 const { logCost } = require('../services/costTracking');
 
 const MAX_RETRIES = 2;
-// only retry transient failures — a schema mismatch won't fix itself on retry
-const RETRYABLE_REASONS = new Set(['empty_response', 'invalid_json']);
+// retryable within the same run — daily quota exhaustion is handled separately below
+const RETRYABLE_REASONS = new Set(['empty_response', 'invalid_json', 'api_error', 'network_error']);
+const DELAY_BETWEEN_CALLS_MS = 2200; // ~30 RPM free tier on gemini-3.1-flash-lite
+
+class QuotaExhaustedError extends Error {}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -26,10 +29,18 @@ async function tagOneImage(image) {
     await logCost('vision', image.id, result.usage);
 
     if (result.success) break;
-    if (!RETRYABLE_REASONS.has(result.reason)) break; // don't retry hard failures
+
+    // Daily quota exhaustion: don't retry this call — signal the whole batch to stop
+    if (result.reason === 'rate_limited') {
+      throw new QuotaExhaustedError(`Daily quota hit at image ${image.id}`);
+    }
+
+    if (!RETRYABLE_REASONS.has(result.reason)) break; // e.g. schema_validation_failed — not worth retrying
 
     attempt += 1;
-    await sleep(500 * attempt); // simple backoff
+    const backoff = 500 * attempt;
+    console.log(`[batch] retrying image ${image.id} (attempt ${attempt}) after ${backoff}ms — reason: ${result.reason}`);
+    await sleep(backoff);
   }
 
   if (!result.success) {
@@ -52,26 +63,38 @@ async function tagOneImage(image) {
 
 async function runBatchTagging() {
   const { rows: pendingImages } = await pool.query(
-    `SELECT id, filename, filepath FROM images WHERE status = 'pending'`
+    `SELECT id, filename, filepath FROM images WHERE status IN ('pending', 'failed')`
   );
 
-  console.log(`[batch] starting run over ${pendingImages.length} pending images`);
+  console.log(`[batch] starting run over ${pendingImages.length} images`);
 
   const results = [];
+  let quotaExhausted = false;
+
   for (const image of pendingImages) {
-    // sequential on purpose: keeps this within the free tier's rate limits;
-    // parallelizing is a stretch-goal once you've confirmed quota headroom
-    const result = await tagOneImage(image);
-    results.push(result);
+    try {
+      const result = await tagOneImage(image);
+      results.push(result);
+    } catch (err) {
+      if (err instanceof QuotaExhaustedError) {
+        console.warn(`[batch] STOPPING RUN — daily free-tier quota exhausted.`);
+        console.warn(`[batch] ${pendingImages.length - results.length} image(s) remain pending.`);
+        console.warn(`[batch] Quota resets on a rolling daily window — rerun 'batch-tag' after it resets, or check https://ai.dev/rate-limit`);
+        quotaExhausted = true;
+        break;
+      }
+      throw err;
+    }
+    await sleep(DELAY_BETWEEN_CALLS_MS);
   }
 
   const summary = results.reduce((acc, r) => {
     acc[r.outcome] = (acc[r.outcome] || 0) + 1;
     return acc;
   }, {});
-  console.log('[batch] run complete:', summary);
+  console.log('[batch] run summary:', summary, quotaExhausted ? '(stopped early: quota exhausted)' : '(complete)');
 
-  return results;
+  return { results, quotaExhausted, remaining: pendingImages.length - results.length };
 }
 
 module.exports = { runBatchTagging };
