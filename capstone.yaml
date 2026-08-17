@@ -1,0 +1,17 @@
+name: flyrank-capstone-imagerelevance
+run: docker compose up -d && node server.js
+seed: node scripts/seedImages.js && node scripts/seedPosts.js && curl -X POST http://localhost:3000/images/batch-tag && curl -X POST http://localhost:3000/images/batch-embed && curl -X POST http://localhost:3000/posts/batch-embed
+test: npm test
+eval: node scripts/evalPrecision.js
+base_url: http://localhost:3000
+endpoints:
+  - GET  /images
+  - POST /images/batch-tag
+  - POST /images/batch-embed
+  - GET  /posts
+  - POST /posts/batch-embed
+  - GET  /posts/:id/images
+  - POST /reviews
+  - GET  /reviews
+  - GET  /reviews/pending
+  - GET  /reviews/why/:suggestionId
